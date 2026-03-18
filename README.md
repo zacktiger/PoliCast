@@ -89,19 +89,6 @@ It is designed to be presentable on **GitHub** and useful for **resume/interview
 
 ---
 
-## System Architecture
-
-```mermaid
-flowchart LR
-    U[User] --> FE[React + Vite Frontend]
-    FE -->|HTTP Requests| API[FastAPI API]
-    API --> ORM[SQLAlchemy ORM]
-    ORM --> DB[(PostgreSQL)]
-
-    S[APScheduler Job\n(every 4h)] --> ORM
-    ORM --> H[(Probability History)]
-```
-
 ### Data Flow
 
 1. Frontend requests market data from FastAPI.
