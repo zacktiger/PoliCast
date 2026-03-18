@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
-import { questions } from '../data/questions.js';
 import PredictionCard from '../components/PredictionCard.jsx';
+import { formatCategoryLabel } from '../utils/questionFormat.js';
 
-export default function Dashboard({ activeCategory, searchQuery }) {
+export default function Dashboard({ questions, loading, error, activeCategory, searchQuery }) {
   const filtered = useMemo(() => {
     let result = questions;
 
@@ -16,24 +16,44 @@ export default function Dashboard({ activeCategory, searchQuery }) {
     }
 
     return result;
-  }, [activeCategory, searchQuery]);
+  }, [questions, activeCategory, searchQuery]);
+
+  const title =
+    activeCategory === 'all'
+      ? 'All Markets'
+      : `${filtered.length} ${formatCategoryLabel(activeCategory)} Markets`;
 
   return (
     <main className="main-content" id="dashboard">
       <div className="page-header">
-        <h1 className="page-title">
-          {activeCategory === 'all'
-            ? 'All Markets'
-            : questions.length > 0
-              ? `${filtered.length} ${activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1)} Markets`
-              : 'Markets'}
-        </h1>
+        <h1 className="page-title">{title}</h1>
         <p className="page-subtitle">
           AI-powered probability estimates • Updated every 3-4 hours
         </p>
       </div>
 
-      {filtered.length === 0 ? (
+      {loading ? (
+        <div style={{
+          textAlign: 'center',
+          padding: '60px 20px',
+          color: 'var(--text-secondary)',
+        }}>
+          <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>⏳</div>
+          <p style={{ fontSize: '1rem', fontWeight: 500 }}>Loading markets...</p>
+        </div>
+      ) : error ? (
+        <div style={{
+          textAlign: 'center',
+          padding: '60px 20px',
+          color: 'var(--red)',
+        }}>
+          <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>⚠️</div>
+          <p style={{ fontSize: '1rem', fontWeight: 600 }}>Failed to load predictions</p>
+          <p style={{ fontSize: '0.875rem', marginTop: '6px', color: 'var(--text-secondary)' }}>
+            {error}
+          </p>
+        </div>
+      ) : filtered.length === 0 ? (
         <div style={{
           textAlign: 'center',
           padding: '60px 20px',

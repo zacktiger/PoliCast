@@ -1,6 +1,4 @@
-import { categories } from '../data/questions.js';
-
-export default function CategoryBar({ activeCategory, setActiveCategory }) {
+export default function CategoryBar({ categories, activeCategory, setActiveCategory }) {
   return (
     <div className="category-bar" id="category-bar">
       <div className="category-bar-inner">

@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -11,13 +11,14 @@ import {
   Legend,
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
+import { fetchQuestionDetail } from '../api/questions.js';
 import {
-  questions,
-  categories,
   getCurrentProb,
   get24hChange,
   getLastUpdated,
-} from '../data/questions.js';
+  getCategoryIcon,
+  formatCategoryLabel,
+} from '../utils/questionFormat.js';
 
 ChartJS.register(
   CategoryScale,
@@ -40,8 +41,91 @@ export default function QuestionDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [timeframe, setTimeframe] = useState('30D');
+  const [question, setQuestion] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const question = questions.find((q) => q.id === Number(id));
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadQuestion = async () => {
+      try {
+        setLoading(true);
+        setError('');
+        const data = await fetchQuestionDetail(id);
+        if (isMounted) {
+          setQuestion(data);
+        }
+      } catch (err) {
+        if (isMounted) {
+          setError(err.message || 'Failed to load question details');
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadQuestion();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [id]);
+
+  const prob = getCurrentProb(question);
+  const change = get24hChange(question);
+  const lastUpdated = getLastUpdated(question);
+  const categoryIcon = getCategoryIcon(question?.category);
+  const categoryLabel = formatCategoryLabel(question?.category);
+
+  const tf = TIMEFRAMES.find((t) => t.label === timeframe);
+  const historySlice = useMemo(() => {
+    if (!question?.history?.length) return [];
+    if (tf.points === Infinity) return question.history;
+    return question.history.slice(-tf.points);
+  }, [question, tf]);
+
+  const chartPoints = historySlice.length > 0 ? historySlice : [{ timestamp: Date.now(), probability: prob }];
+
+  // Calculate probability range info
+  const allProbs = (question?.history || []).map((p) => p.probability);
+  const minSource = allProbs.length > 0 ? allProbs : [prob];
+  const minProb = Math.round(Math.min(...minSource));
+  const maxProb = Math.round(Math.max(...minSource));
+  const resolution = question?.resolution || 'N/A';
+  const drivers = question?.drivers || [];
+  const hasConfidence = typeof question?.aiConfidence === 'number';
+
+  if (loading) {
+    return (
+      <main className="main-content">
+        <button className="detail-back-btn" onClick={() => navigate('/')}>
+          ← Back to Markets
+        </button>
+        <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--text-secondary)' }}>
+          <div style={{ fontSize: '3rem', marginBottom: '12px' }}>⏳</div>
+          <p style={{ fontSize: '1.125rem', fontWeight: 600 }}>Loading question...</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (error) {
+    return (
+      <main className="main-content">
+        <button className="detail-back-btn" onClick={() => navigate('/')}>
+          ← Back to Markets
+        </button>
+        <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--red)' }}>
+          <div style={{ fontSize: '3rem', marginBottom: '12px' }}>⚠️</div>
+          <p style={{ fontSize: '1.125rem', fontWeight: 600 }}>Failed to load question</p>
+          <p style={{ fontSize: '0.95rem', marginTop: '8px', color: 'var(--text-secondary)' }}>{error}</p>
+        </div>
+      </main>
+    );
+  }
 
   if (!question) {
     return (
@@ -57,20 +141,9 @@ export default function QuestionDetail() {
     );
   }
 
-  const prob = getCurrentProb(question);
-  const change = get24hChange(question);
-  const lastUpdated = getLastUpdated(question);
-  const catInfo = categories.find((c) => c.id === question.category);
-
-  const tf = TIMEFRAMES.find((t) => t.label === timeframe);
-  const historySlice = useMemo(() => {
-    if (tf.points === Infinity) return question.history;
-    return question.history.slice(-tf.points);
-  }, [question, tf]);
-
   // Chart data
   const chartData = {
-    labels: historySlice.map((p) => {
+    labels: chartPoints.map((p) => {
       const d = new Date(p.timestamp);
       if (timeframe === '24H') {
         return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -80,7 +153,7 @@ export default function QuestionDetail() {
     datasets: [
       {
         label: 'YES Probability',
-        data: historySlice.map((p) => p.probability),
+        data: chartPoints.map((p) => p.probability),
         borderColor: '#06b6d4',
         backgroundColor: (ctx) => {
           const chart = ctx.chart;
@@ -102,7 +175,7 @@ export default function QuestionDetail() {
       },
       {
         label: 'NO Probability',
-        data: historySlice.map((p) => 100 - p.probability),
+        data: chartPoints.map((p) => 100 - p.probability),
         borderColor: '#f85149',
         backgroundColor: 'transparent',
         borderWidth: 1.5,
@@ -185,10 +258,6 @@ export default function QuestionDetail() {
     },
   };
 
-  // Calculate probability range info
-  const allProbs = question.history.map((p) => p.probability);
-  const minProb = Math.round(Math.min(...allProbs));
-  const maxProb = Math.round(Math.max(...allProbs));
 
   return (
     <main className="main-content detail-page" id={`detail-${question.id}`}>
@@ -205,8 +274,8 @@ export default function QuestionDetail() {
       <div className="detail-header">
         <div className="detail-title-section">
           <div className="detail-category">
-            <span>{catInfo?.icon}</span>
-            {catInfo?.label}
+            <span>{categoryIcon}</span>
+            {categoryLabel}
           </div>
           <h1 className="detail-title">{question.title}</h1>
           <div className="detail-meta-row">
@@ -214,7 +283,7 @@ export default function QuestionDetail() {
               🕐 Updated {lastUpdated}
             </div>
             <div className="detail-meta-item">
-              📅 Resolves {question.resolution}
+              📅 Resolves {resolution}
             </div>
           </div>
         </div>
@@ -274,14 +343,20 @@ export default function QuestionDetail() {
             </strong>
             {' in the last 24 hours'}
           </p>
-          {question.drivers.map((driver, i) => (
-            <div className="driver-item" key={i}>
-              <div className={`driver-icon ${driver.impact}`}>
-                {driver.impact === 'up' ? '↑' : '↓'}
-              </div>
-              <span className="driver-text">{driver.text}</span>
+          {drivers.length === 0 ? (
+            <div className="driver-item">
+              <span className="driver-text">No signal drivers available yet.</span>
             </div>
-          ))}
+          ) : (
+            drivers.map((driver, i) => (
+              <div className="driver-item" key={i}>
+                <div className={`driver-icon ${driver.impact}`}>
+                  {driver.impact === 'up' ? '↑' : '↓'}
+                </div>
+                <span className="driver-text">{driver.text}</span>
+              </div>
+            ))
+          )}
         </div>
 
         {/* Market Info panel */}
@@ -289,7 +364,7 @@ export default function QuestionDetail() {
           <h3 className="info-title">📊 Market Info</h3>
           <div className="info-row">
             <span className="info-label">Category</span>
-            <span className="info-value cyan">{catInfo?.icon} {catInfo?.label}</span>
+            <span className="info-value cyan">{categoryIcon} {categoryLabel}</span>
           </div>
           <div className="info-row">
             <span className="info-label">Current YES</span>
@@ -311,18 +386,22 @@ export default function QuestionDetail() {
           </div>
           <div className="info-row">
             <span className="info-label">Resolution Date</span>
-            <span className="info-value amber">{question.resolution}</span>
+            <span className="info-value amber">{resolution}</span>
           </div>
-          <div className="info-row">
-            <span className="info-label">AI Confidence</span>
-            <span className="info-value purple">🤖 {question.aiConfidence}%</span>
-          </div>
-          <div className="confidence-bar-bg">
-            <div
-              className="confidence-bar-fill"
-              style={{ width: `${question.aiConfidence}%` }}
-            />
-          </div>
+          {hasConfidence ? (
+            <>
+              <div className="info-row">
+                <span className="info-label">AI Confidence</span>
+                <span className="info-value purple">🤖 {question.aiConfidence}%</span>
+              </div>
+              <div className="confidence-bar-bg">
+                <div
+                  className="confidence-bar-fill"
+                  style={{ width: `${question.aiConfidence}%` }}
+                />
+              </div>
+            </>
+          ) : null}
           <div className="info-row">
             <span className="info-label">Data Points</span>
             <span className="info-value">{question.history.length}</span>

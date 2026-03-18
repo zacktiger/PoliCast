@@ -1,5 +1,11 @@
 import { useNavigate } from 'react-router-dom';
-import { getCurrentProb, get24hChange, getLastUpdated, categories } from '../data/questions.js';
+import {
+  getCurrentProb,
+  get24hChange,
+  getLastUpdated,
+  getCategoryIcon,
+  formatCategoryLabel,
+} from '../utils/questionFormat.js';
 import Sparkline from './Sparkline.jsx';
 
 export default function PredictionCard({ question, index }) {
@@ -7,10 +13,12 @@ export default function PredictionCard({ question, index }) {
   const prob = getCurrentProb(question);
   const change = get24hChange(question);
   const lastUpdated = getLastUpdated(question);
-  const catInfo = categories.find((c) => c.id === question.category);
+  const categoryLabel = formatCategoryLabel(question.category);
+  const categoryIcon = getCategoryIcon(question.category);
 
   // Get last 48 data points for sparkline (~7 days)
   const sparkData = question.history.slice(-48).map((p) => p.probability);
+  const resolution = question.resolution || 'N/A';
 
   return (
     <div
@@ -24,8 +32,8 @@ export default function PredictionCard({ question, index }) {
     >
       {/* Category tag */}
       <div className="card-category-tag">
-        <span>{catInfo?.icon}</span>
-        {catInfo?.label}
+        <span>{categoryIcon}</span>
+        {categoryLabel}
       </div>
 
       {/* Title */}
@@ -73,11 +81,13 @@ export default function PredictionCard({ question, index }) {
         <div className="card-meta">
           <span>Updated {lastUpdated}</span>
           <span className="meta-dot" />
-          <span>Resolves {question.resolution}</span>
+          <span>Resolves {resolution}</span>
         </div>
-        <div className="card-ai-score">
-          🤖 {question.aiConfidence}%
-        </div>
+        {typeof question.aiConfidence === 'number' ? (
+          <div className="card-ai-score">
+            🤖 {question.aiConfidence}%
+          </div>
+        ) : null}
       </div>
     </div>
   );
